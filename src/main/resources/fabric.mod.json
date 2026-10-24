@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "riseofnations",
+  "version": "${version}",
+  "name": "Rise of Nations: AI Civilization",
+  "description": "A story-driven civilization campaign. Early development: economy, story engine and save format are in place; nations, diplomacy and armies are planned.",
+  "authors": [
+    "ahmadrohanmustafa-web"
+  ],
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "com.riseofnations.RiseOfNationsMod"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.5",
+    "minecraft": "~26.3",
+    "java": ">=25",
+    "fabric-api": "*"
+  }
+}
