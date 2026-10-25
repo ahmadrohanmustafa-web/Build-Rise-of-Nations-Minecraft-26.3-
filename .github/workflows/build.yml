@@ -21,10 +21,10 @@ jobs:
           distribution: temurin
           java-version: '25'
 
-      - name: Set up Gradle 9.1
+      - name: Set up Gradle 9.5.0
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '9.1.0'
+          gradle-version: '9.5.0'
 
       # Compiles the mod AND runs the game-logic tests. Any failure stops the build.
       - name: Build and test
