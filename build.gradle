@@ -1,6 +1,6 @@
-
 plugins {
-    // Minecraft 26.x uses the non-remapping Loom plugin.
+    // Minecraft 26.x is not obfuscated, so we use the NON-remapping Loom plugin.
+    // That means: no "mappings" line and "implementation" (not "modImplementation").
     id 'net.fabricmc.fabric-loom' version "${loom_version}"
 }
 
@@ -12,7 +12,7 @@ base {
 }
 
 repositories {
-    // Loom configures the required Minecraft repositories.
+    // Loom adds the Minecraft repositories automatically. Nothing else is needed yet.
 }
 
 dependencies {
@@ -23,33 +23,31 @@ dependencies {
 
 processResources {
     inputs.property "version", project.version
-
     filesMatching("fabric.mod.json") {
         expand "version": inputs.properties.version
     }
 }
 
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(25)
-    }
-
-    withSourcesJar()
-}
-
 tasks.withType(JavaCompile).configureEach {
-    options.release = 25
-    options.encoding = 'UTF-8'
+    it.options.release = 25   // Minecraft 26.x requires Java 25
+    it.options.encoding = 'UTF-8'
 }
 
-// Disable the default test task; run our custom game-logic tests instead.
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
+}
+
+// ---- Tests for the pure-Java game logic (economy, story, save format) ----
+// The classic "test" task is disabled because we run our own tiny runner (no extra downloads).
 tasks.named('test') {
     enabled = false
 }
 
 tasks.register('coreTests', JavaExec) {
     group = 'verification'
-    description = 'Runs the game-logic tests.'
+    description = 'Runs the game-logic tests. Fails the build if any test fails.'
     dependsOn 'testClasses'
     classpath = sourceSets.test.output + sourceSets.main.output
     mainClass = 'com.riseofnations.core.AllTests'
