@@ -1,5 +1,12 @@
 package com.riseofnations.core.persist;
 
+import com.riseofnations.core.civ.CivColor;
+import com.riseofnations.core.civ.CivNames;
+import com.riseofnations.core.civ.CivWire;
+import com.riseofnations.core.civ.Civilization;
+import com.riseofnations.core.civ.DevelopmentStage;
+import com.riseofnations.core.civ.EconomicStatus;
+import com.riseofnations.core.civ.Government;
 import com.riseofnations.core.economy.Ledger;
 import com.riseofnations.core.economy.WageTracker;
 import com.riseofnations.core.story.PlayerStory;
@@ -20,7 +27,7 @@ import java.util.TreeMap;
  */
 public final class StateCodec {
 
-    public static final int SCHEMA_VERSION = 1;
+    public static final int SCHEMA_VERSION = 2;
     private static final String HEADER = "ron-state";
 
     public record Decoded(CoreState state, List<String> warnings, boolean refused) { }
@@ -35,6 +42,13 @@ public final class StateCodec {
         sb.append("burned\t").append(l.totalBurned()).append('\n');
         for (Map.Entry<String, Long> e : l.balancesView().entrySet()) {
             sb.append("bal\t").append(e.getKey()).append('\t').append(e.getValue()).append('\n');
+        }
+        for (Civilization c : state.civilizationsView().values()) {
+            sb.append("civ\t").append(c.ownerId()).append('\t').append(CivWire.enc(c.name())).append('\t')
+                    .append(CivWire.enc(c.leaderName())).append('\t').append(c.color().id()).append('\t')
+                    .append(c.government().id()).append('\t').append(c.population()).append('\t')
+                    .append(c.settlements()).append('\t').append(c.stage().id()).append('\t')
+                    .append(c.economy().id()).append('\t').append(c.createdAtEpochMs()).append('\n');
         }
         for (Map.Entry<String, Long> e : state.wages().lastPaidView().entrySet()) {
             int bar = e.getKey().indexOf('|');
@@ -99,6 +113,7 @@ public final class StateCodec {
         WageTracker wages = new WageTracker();
         CoreState[] holder = new CoreState[1];
         Map<String, PlayerStory> stories = new TreeMap<>();
+        List<Civilization> civs = new ArrayList<>();
 
         for (int i = 1; i < lines.length; i++) {
             String line = lines[i];
@@ -109,6 +124,7 @@ public final class StateCodec {
                     case "minted" -> minted = Long.parseLong(need(f, 2)[1]);
                     case "burned" -> burned = Long.parseLong(need(f, 2)[1]);
                     case "bal" -> balances.put(need(f, 3)[1], Long.parseLong(f[2]));
+                    case "civ" -> civs.add(decodeCivilization(f, i + 1, warnings));
                     case "wage" -> {
                         need(f, 4);
                         if (!Ledger.validId(f[1]) || !Ledger.validId(f[2])) throw new IllegalArgumentException("unsafe id");
@@ -140,7 +156,66 @@ public final class StateCodec {
             PlayerStory target = holder[0].story(e.getKey());
             copyInto(target, e.getValue());
         }
+        for (Civilization civ : civs) {
+            if (holder[0].civilization(civ.ownerId()) != null) {
+                warnings.add("duplicate civilization for " + civ.ownerId() + " ignored");
+                continue;
+            }
+            holder[0].putCivilization(civ);
+            String account = com.riseofnations.core.civ.CivilizationService.treasuryAccount(civ.ownerId());
+            if (!holder[0].ledger().exists(account)) {
+                holder[0].ledger().open(account);
+                warnings.add("treasury account for " + civ.ownerId() + " was missing and has been opened empty");
+            }
+        }
         return new Decoded(holder[0], warnings, false);
+    }
+
+    /**
+     * Reads one "civ" line. Missing or invalid fields get safe defaults (with a warning) instead of
+     * losing the civilization. Throws only if the owner id itself is unusable.
+     */
+    private static Civilization decodeCivilization(String[] f, int lineNo, List<String> warnings) {
+        if (f.length != 11) throw new IllegalArgumentException("expected 11 fields, got " + f.length);
+        String owner = safe(f[1]);
+        String name = CivWire.dec(f[2]);
+        CivNames.NameCheck nameCheck = CivNames.check(name == null ? "" : name);
+        if (!nameCheck.ok()) {
+            warnings.add("line " + lineNo + ": invalid civilization name, using a default");
+            nameCheck = new CivNames.NameCheck("Unnamed Civilization", null);
+        }
+        String leader = CivWire.dec(f[3]);
+        CivNames.NameCheck leaderCheck = CivNames.check(leader == null ? "" : leader);
+        if (!leaderCheck.ok()) {
+            warnings.add("line " + lineNo + ": invalid leader name, using a default");
+            leaderCheck = new CivNames.NameCheck("Unknown Leader", null);
+        }
+        CivColor color = CivColor.fromId(f[4]);
+        if (color == null) {
+            warnings.add("line " + lineNo + ": unknown color '" + f[4] + "', using default");
+            color = CivColor.values()[0];
+        }
+        Government gov = Government.fromId(f[5]);
+        if (gov == null) {
+            warnings.add("line " + lineNo + ": unknown government '" + f[5] + "', using default");
+            gov = Government.values()[0];
+        }
+        long population = parseOr(f[6], com.riseofnations.core.civ.CivilizationService.STARTING_POPULATION, 0, warnings, lineNo, "population");
+        int settlements = (int) parseOr(f[7], com.riseofnations.core.civ.CivilizationService.STARTING_SETTLEMENTS, 0, warnings, lineNo, "settlements");
+        long created = parseOr(f[10], 0, 0, warnings, lineNo, "created time");
+        return new Civilization(owner, nameCheck.clean(), leaderCheck.clean(), color, gov, population,
+                settlements, DevelopmentStage.fromIdOrDefault(f[8]), EconomicStatus.fromIdOrDefault(f[9]), created);
+    }
+
+    private static long parseOr(String text, long fallback, long min, List<String> warnings, int lineNo, String what) {
+        try {
+            long v = Long.parseLong(text);
+            if (v >= min && v <= Integer.MAX_VALUE * 1000L) return v;
+        } catch (NumberFormatException ignored) {
+            // fall through to the default below
+        }
+        warnings.add("line " + lineNo + ": invalid " + what + ", using " + fallback);
+        return fallback;
     }
 
     private static void applyStoryLine(PlayerStory s, String[] f) {

@@ -3,20 +3,24 @@ package com.riseofnations;
 import com.riseofnations.core.config.RonSettings;
 import com.riseofnations.core.story.DefaultStory;
 import com.riseofnations.core.story.StoryDefinition;
+import com.riseofnations.net.CivilizationNetworking;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * Mod entry point. Kept deliberately small: it loads the config, checks that the built-in story is
- * valid, and registers one read-only command. All real game logic lives in com.riseofnations.core,
+ * valid, registers the civilization packets, and registers the /ron commands. All real game logic lives in com.riseofnations.core,
  * which has no Minecraft dependency and is covered by tests.
  *
- * STAGE 1 STATUS: this file was written against Minecraft 26.3 but has NOT been compiled yet.
+ * Shared by client and dedicated server, so it must never reference client-only classes.
  */
 public final class RiseOfNationsMod implements ModInitializer {
 
@@ -40,8 +44,13 @@ public final class RiseOfNationsMod implements ModInitializer {
             LOGGER.error("Rise of Nations: the built-in story is invalid and was not loaded.", e);
         }
 
+        CivilizationNetworking.register();
+
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
                 dispatcher.register(Commands.literal("ron")
+                        .executes(context -> openCivilization(context.getSource()))
+                        .then(Commands.literal("civilization")
+                                .executes(context -> openCivilization(context.getSource())))
                         .then(Commands.literal("about")
                                 .executes(context -> {
                                     String version = FabricLoader.getInstance().getModContainer(MOD_ID)
@@ -54,5 +63,12 @@ public final class RiseOfNationsMod implements ModInitializer {
                                 }))));
 
         LOGGER.info("Rise of Nations initialized.");
+    }
+
+    /** /ron and /ron civilization: ask the server for this player's data and open the screen on their client. */
+    private static int openCivilization(CommandSourceStack source) throws CommandSyntaxException {
+        ServerPlayer player = source.getPlayerOrException();
+        CivilizationNetworking.openFor(player);
+        return 1;
     }
 }

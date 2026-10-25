@@ -9,6 +9,9 @@ public final class AllTests {
         EconomyTests.run();
         StoryTests.run();
         PersistenceTests.run();
+        CivilizationTests.run();
+        PersistenceCivTests.run();
+        IsolationTests.run();
         System.exit(TestKit.report());
     }
 }

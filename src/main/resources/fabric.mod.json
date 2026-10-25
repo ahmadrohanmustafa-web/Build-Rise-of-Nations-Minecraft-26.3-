@@ -3,7 +3,7 @@
   "id": "riseofnations",
   "version": "${version}",
   "name": "Rise of Nations: AI Civilization",
-  "description": "A story-driven civilization campaign. Early development: economy, story engine and save format are in place; nations, diplomacy and armies are planned.",
+  "description": "A story-driven civilization campaign. Early development: found a civilization, manage it in a GUI, and keep it saved with your world. Nations, diplomacy and armies are planned.",
   "authors": [
     "ahmadrohanmustafa-web"
   ],
@@ -11,6 +11,9 @@
   "entrypoints": {
     "main": [
       "com.riseofnations.RiseOfNationsMod"
+    ],
+    "client": [
+      "com.riseofnations.client.RiseOfNationsClient"
     ]
   },
   "depends": {

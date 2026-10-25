@@ -1,5 +1,6 @@
 package com.riseofnations.core.persist;
 
+import com.riseofnations.core.civ.Civilization;
 import com.riseofnations.core.economy.Ledger;
 import com.riseofnations.core.economy.WageTracker;
 import com.riseofnations.core.story.PlayerStory;
@@ -14,6 +15,7 @@ public final class CoreState {
     private final Ledger ledger;
     private final WageTracker wages;
     private final Map<String, PlayerStory> stories = new TreeMap<>();
+    private final Map<String, Civilization> civilizations = new TreeMap<>();
 
     public CoreState() {
         this(new Ledger(), new WageTracker());
@@ -36,5 +38,18 @@ public final class CoreState {
 
     public Map<String, PlayerStory> storiesView() {
         return Collections.unmodifiableMap(stories);
+    }
+
+    /** The civilization owned by this player, or null. */
+    public Civilization civilization(String ownerId) {
+        return ownerId == null ? null : civilizations.get(ownerId);
+    }
+
+    public void putCivilization(Civilization civ) {
+        civilizations.put(civ.ownerId(), civ);
+    }
+
+    public Map<String, Civilization> civilizationsView() {
+        return Collections.unmodifiableMap(civilizations);
     }
 }
